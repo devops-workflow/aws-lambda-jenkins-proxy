@@ -9,7 +9,7 @@ jobs:
       - run: echo "Initial testing should be here"
   jenkins:
     docker:
-      - image: ubuntu:16.04
+      - image: circleci/python
     steps:
       - deploy:
           name: Call Jenkins to continue workflow

@@ -13,6 +13,7 @@ if [ "${CIRCLECI}" != 'true' ]; then
   exit 1
 fi
 if [ "${CIRCLE_BRANCH}" == "master" ]; then
+  # TODO: Pass commit hash CIRCLE_SHA1
   repoBaseURL="${CIRCLE_REPOSITORY_URL%.*}"
   repo="${repoBaseURL##*/}"
   job_name="${namespace}+${repo}+CI+Package_Docker"
