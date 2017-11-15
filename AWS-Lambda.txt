@@ -1,0 +1,20 @@
+Function Name: jenkins-trigger-proxy
+Runtime: Node.js 6.10
+Handler: index.handler
+
+Environment Variables:
+HEADERS:        ["Content-Type"]
+JENKINS_PSWD
+JENKINS_USER
+TARGET_HOSTNAME
+TARGET_METHOD:  GET
+TARGET_PATH:    /
+
+Tags
+Description:    Proxy for triggering Jenkins jobs
+
+Execution Role
+service-role/jenkins-trigger-proxy
+
+Network
+Put in VPC, subnets, security groups that provides correct access

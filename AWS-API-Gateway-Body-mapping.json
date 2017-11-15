@@ -1,0 +1,10 @@
+{
+  "headers": {
+    "Content-Type": "application/json"
+  },
+  "body":{
+    "JobName": "$input.params('JobName')",
+	  "JobToken": "$input.params('JobToken')",
+	  "BuildCause": "$input.params('BuildCause')"
+	}
+}

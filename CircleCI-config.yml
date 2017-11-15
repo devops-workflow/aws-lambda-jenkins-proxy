@@ -1,0 +1,35 @@
+version: 2
+jobs:
+  build:
+    working_directory: ~/repo
+    docker:
+      - image: docker:git
+    steps:
+      - checkout
+      - run: echo "Initial testing should be here"
+  jenkins:
+    docker:
+      - image: ubuntu:16.04
+    steps:
+      - deploy:
+          name: Call Jenkins to continue workflow
+          command: |
+            #job_name='TEST+docker-node+CI+Package_Docker'
+            echo "Repo URL: ${CIRCLE_REPOSITORY_URL}"
+            repoBaseURL="${CIRCLE_REPOSITORY_URL%.*}"
+            repo="${repoBaseURL##*/}"
+            job_name="TEST+${repo}+CI+Package_Docker"
+            # https://circleci.com/docs/2.0/env-vars/
+            build_cause="${JENKINS_BUILD_CAUSE}%20by%20${CIRCLE_USERNAME}"
+            apt update -y
+            apt install -y curl
+            curl -H "x-api-key: ${JENKINS_API_KEY}" ${JENKINS_URL}${job_name}/${JENKINS_JOB_TOKEN}/${build_cause}
+workflows:
+  version: 2
+  node_workflow:
+    jobs:
+      - build
+      - jenkins:
+          context: org-global
+          requires:
+            - build
