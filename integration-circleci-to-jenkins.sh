@@ -7,6 +7,7 @@
 #   JENKINS_API_KEY, JENKINS_URL, JENKINS_JOB_TOKEN,
 #   JENKINS_BUILD_CAUSE
 namespace=$1
+echo "Namespace: ${namespace}"
 
 if [ "${CIRCLECI}" != 'true' ]; then
   echo "ERROR: Not running under CircleCI"
