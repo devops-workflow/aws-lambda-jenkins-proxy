@@ -7,20 +7,35 @@ jobs:
     steps:
       - checkout
       - run: echo "Initial testing should be here"
+      - run: |
+          mkdir -p workspace
+          echo "${CIRCLE_BUILD_NUM}" > workspace/build_num
+      - persist_to_workspace:
+          root: workspace
+          paths:
+            - build_num
   jenkins:
     docker:
       - image: circleci/python
     steps:
+      - attach_workspace:
+          at: /tmp/workspace
+      - run: echo 'export UPSTREAM_BUILD_NUM=$(cat /tmp/workspace/build_num)' >> $BASH_ENV
+      - run: |
+          echo "Upstream build #: ${UPSTREAM_BUILD_NUM}"
+          echo "Current build #: ${CIRCLE_BUILD_NUM}"
       - deploy:
           name: Call Jenkins to continue workflow
           command: |
-            curl -sL https://raw.githubusercontent.com/devops-workflow/aws-lambda-jenkins-proxy/master/integration-circleci-to-jenkins.sh | bash -s -- NAMESPACE
+            curl -sSL https://raw.githubusercontent.com/devops-workflow/aws-lambda-jenkins-proxy/master/integration-circleci-to-jenkins.sh | bash -x -s -- NAMESPACE
             # or
             #wget -qO- https://raw.githubusercontent.com/devops-workflow/aws-lambda-jenkins-proxy/master/integration-circleci-to-jenkins.sh | bash -s -- NAMESPACE
             # https://circleci.com/docs/2.0/env-vars/
+          #environment:
+          #  UPSTREAM_BUILD_NUM: $(cat /tmp/workspace/build_num)
 workflows:
   version: 2
-  node_workflow:
+  ci:
     jobs:
       - build
       - jenkins:
