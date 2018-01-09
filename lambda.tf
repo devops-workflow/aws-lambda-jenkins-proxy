@@ -53,9 +53,9 @@ resource "aws_lambda_function" "test_lambda" {
   environment {
     variables = {
       HEADERS = '["Content-Type"]'
-      JENKINS_PSWD = "7c2c19113f3bc56df4be8ad624a97118dc01fbd6"
-      JENKINS_USER = "wiser-ci"
-      TARGET_HOSTNAME = "jenkins.one.wiser.com"
+      JENKINS_PSWD = ""
+      JENKINS_USER = ""
+      TARGET_HOSTNAME = ""
       TARGET_PATH = "/"
       TARGET_METHOD = "GET"
     }
