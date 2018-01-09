@@ -31,6 +31,10 @@ https://www.terraform.io/docs/providers/aws/r/lambda_function.html
 https://www.terraform.io/docs/providers/aws/r/lambda_permission.html
 */
 
+# https://andydote.co.uk/2017/03/17/terraform-aws-lambda-api-gateway/
+# https://digitalronin.github.io/2017/06/12/terraform-aws-lambda.html
+#   https://github.com/digitalronin/terraform-lambda-helloworld
+
 resource "aws_api_gateway_rest_api" "MyDemoAPI" {
   name        = "MyDemoAPI"
   description = "This is my API for demonstration purposes"
@@ -70,6 +74,8 @@ resource "aws_api_gateway_resource" "MyDemoResource" {
   parent_id   = "${aws_api_gateway_rest_api.MyDemoAPI.root_resource_id}"
   path_part   = "mydemoresource"
 }
+# Attach resources to other resources to create path
+# /{JobName}/{JobToken}/{BuildCause}
 
 resource "aws_api_gateway_method" "MyDemoMethod" {
   rest_api_id   = "${aws_api_gateway_rest_api.MyDemoAPI.id}"
@@ -82,27 +88,22 @@ resource "aws_api_gateway_integration" "MyDemoIntegration" {
   rest_api_id          = "${aws_api_gateway_rest_api.MyDemoAPI.id}"
   resource_id          = "${aws_api_gateway_resource.MyDemoResource.id}"
   http_method          = "${aws_api_gateway_method.MyDemoMethod.http_method}"
-  type                 = "MOCK"
-  cache_key_parameters = ["method.request.path.param"]
-  cache_namespace      = "foobar"
+  type                 = "AWS_PROXY"
+  uri      = "arn:aws:apigateway:${var.region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${var.region}:${var.account_id}:function:${aws_lambda_function.example_test_function.function_name}/invocations"
+  integration_http_method = "GET"
+  #cache_key_parameters = ["method.request.path.param"]
+  #cache_namespace      = "foobar"
   request_parameters = {
     "integration.request.header.X-Authorization" = "'static'"
   }
   # Transforms the incoming XML request to JSON
   request_templates {
-    "application/xml" = <<EOF
+    "application/xml" = <<REQUEST_TEMPLATE
 {
    "body" : $input.json('$')
 }
-EOF
+REQUEST_TEMPLATE
   }
-}
-
-resource "aws_api_gateway_integration" "MyDemoIntegration" {
-  rest_api_id = "${aws_api_gateway_rest_api.MyDemoAPI.id}"
-  resource_id = "${aws_api_gateway_resource.MyDemoResource.id}"
-  http_method = "${aws_api_gateway_method.MyDemoMethod.http_method}"
-  type        = "MOCK"
 }
 
 resource "aws_api_gateway_method_response" "200" {
@@ -127,4 +128,30 @@ resource "aws_api_gateway_integration_response" "MyDemoIntegrationResponse" {
 </message>
 EOF
   }
+}
+
+resource "aws_api_gateway_deployment" "example_deployment_dev" {
+  depends_on = [
+    "aws_api_gateway_method.example_api_method",
+    "aws_api_gateway_integration.example_api_method-integration"
+  ]
+  rest_api_id = "${aws_api_gateway_rest_api.example_api.id}"
+  stage_name = "dev"
+}
+
+resource "aws_api_gateway_deployment" "example_deployment_prod" {
+  depends_on = [
+    "aws_api_gateway_method.example_api_method",
+    "aws_api_gateway_integration.example_api_method-integration"
+  ]
+  rest_api_id = "${aws_api_gateway_rest_api.example_api.id}"
+  stage_name = "api"
+}
+
+output "dev_url" {
+  value = "https://${aws_api_gateway_deployment.example_deployment_dev.rest_api_id}.execute-api.${var.region}.amazonaws.com/${aws_api_gateway_deployment.example_deployment_dev.stage_name}"
+}
+
+output "prod_url" {
+  value = "https://${aws_api_gateway_deployment.example_deployment_prod.rest_api_id}.execute-api.${var.region}.amazonaws.com/${aws_api_gateway_deployment.example_deployment_prod.stage_name}"
 }
