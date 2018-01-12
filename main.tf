@@ -79,7 +79,22 @@ data "aws_iam_policy_document" "assume_role_policy" {
     effect = "Allow"
   }
 }
-
+data "aws_iam_policy_document" "LambdaPerms" {
+  statement {
+    actions   = [
+      "ec2:CreateNetworkInterface",
+      "ec2:DeleteNetworkInterface",
+      "ec2:DescribeNetworkInterfaces"
+    ]
+    effect    = "Allow"
+    resources = ["*"]
+  }
+}
+resource "aws_iam_role_policy" "LambdaPerms" {
+    name    = "LambdaVPCPermissions"
+    role    = "${aws_iam_role.iam_for_lambda.id}"
+    policy  = "${data.aws_iam_policy_document.LambdaPerms.json}"
+}
 resource "aws_iam_role" "iam_for_lambda" {
   name = "jenkins-trigger"
   #path               = "${var.aws_iam_role_path}"
@@ -115,18 +130,18 @@ resource "aws_lambda_function" "test_lambda" {
   publish           = true
   environment {
     variables = {
-      HEADERS = "Content-Type"
-      JENKINS_PSWD = ""
-      JENKINS_USER = ""
-      TARGET_HOSTNAME = ""
+      HEADERS = "${var.headers}"
+      JENKINS_PSWD = "${var.jenkins_pswd}"
+      JENKINS_USER = "${var.jenkins_user}"
+      TARGET_HOSTNAME = "${var.jenkins_host}"
       TARGET_PATH = "/"
       TARGET_METHOD = "GET"
     }
-  }/* # Either something is invalid, but it looks good or perm issue but I should have full rights
+  }
   vpc_config {
     security_group_ids  = ["${list(module.lambda-sg.id)}"]
     subnet_ids          = ["${data.aws_subnet_ids.private_subnet_ids.ids}"]
-  }*/
+  }
   tags {
      "Description"  = "TEST Proxy for triggering Jenkins jobs"
      "terraform"    = "true"
@@ -227,20 +242,21 @@ resource "aws_api_gateway_resource" "build_cause" {
 }
 
 resource "aws_api_gateway_method" "get" {
-  rest_api_id   = "${aws_api_gateway_rest_api.jenkins-trigger.id}"
-  resource_id   = "${aws_api_gateway_resource.build_cause.id}"
-  http_method   = "GET"
-  authorization = "NONE"
+  rest_api_id       = "${aws_api_gateway_rest_api.jenkins-trigger.id}"
+  resource_id       = "${aws_api_gateway_resource.build_cause.id}"
+  http_method       = "GET"
+  authorization     = "NONE"
   api_key_required  = true
 }
 
 resource "aws_api_gateway_integration" "lambda" {
-  rest_api_id          = "${aws_api_gateway_rest_api.jenkins-trigger.id}"
-  resource_id          = "${aws_api_gateway_resource.build_cause.id}"
-  http_method          = "${aws_api_gateway_method.get.http_method}"
-  type                 = "AWS"
-  uri      = "arn:aws:apigateway:${var.region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${var.region}:${data.aws_caller_identity.current.account_id}:function:${aws_lambda_function.test_lambda.function_name}/invocations"
+  rest_api_id             = "${aws_api_gateway_rest_api.jenkins-trigger.id}"
+  resource_id             = "${aws_api_gateway_resource.build_cause.id}"
+  http_method             = "${aws_api_gateway_method.get.http_method}"
+  type                    = "AWS"
+  uri   = "arn:aws:apigateway:${var.region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${var.region}:${data.aws_caller_identity.current.account_id}:function:${aws_lambda_function.test_lambda.function_name}/invocations"
   integration_http_method = "GET"
+  passthrough_behavior    = "WHEN_NO_TEMPLATES"
   #cache_key_parameters = ["method.request.path.param"]
   #cache_namespace      = "foobar"
   /*request_parameters = {
@@ -304,8 +320,50 @@ resource "aws_api_gateway_deployment" "prod" {
     "aws_api_gateway_integration.lambda"
   ]
   rest_api_id = "${aws_api_gateway_rest_api.jenkins-trigger.id}"
-  stage_name = "ci2"
+  stage_name  = "ci2"
 }
+
+resource "aws_api_gateway_documentation_part" "GetTrigger" {
+  location {
+    #name    = "BuildCause"
+    type    = "METHOD"
+    method  = "GET"
+    path    = "/{JobName}/{JobToken}/{BuildCause}"
+  }
+  properties  = "{\"description\":\"What caused this request to be triggered?\"}"
+  rest_api_id = "${aws_api_gateway_rest_api.jenkins-trigger.id}"
+}
+resource "aws_api_gateway_documentation_part" "PathBuildCause" {
+  location {
+    type    = "PATH_PARAMETER"
+    name    = "BuildCause"
+    method  = "GET"
+    path    = "/{JobName}/{JobToken}/{BuildCause}"
+  }
+  properties  = "{\"description\":\"What caused this request to be triggered?\"}"
+  rest_api_id = "${aws_api_gateway_rest_api.jenkins-trigger.id}"
+}
+resource "aws_api_gateway_documentation_part" "PathJobName" {
+  location {
+    type    = "PATH_PARAMETER"
+    name    = "JobName"
+    method  = "GET"
+    path    = "/{JobName}"
+  }
+  properties  = "{\"description\":\"Name of the Jenkins Job to trigger\"}"
+  rest_api_id = "${aws_api_gateway_rest_api.jenkins-trigger.id}"
+}
+resource "aws_api_gateway_documentation_part" "PathJobToken" {
+  location {
+    type    = "PATH_PARAMETER"
+    name    = "JobToken"
+    method  = "GET"
+    path    = "/{JobName}/{JobToken}"
+  }
+  properties  = "{\"description\":\"Jenkins Job Token for triggering the specified job\"}"
+  rest_api_id = "${aws_api_gateway_rest_api.jenkins-trigger.id}"
+}
+
 /*
 output "dev_url" {
   value = "https://${aws_api_gateway_deployment.example_deployment_dev.rest_api_id}.execute-api.${var.region}.amazonaws.com/${aws_api_gateway_deployment.example_deployment_dev.stage_name}"
