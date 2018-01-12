@@ -268,6 +268,12 @@ resource "aws_api_gateway_integration" "lambda" {
   passthrough_behavior    = "WHEN_NO_TEMPLATES"
   #cache_key_parameters = ["method.request.path.param"]
   #cache_namespace      = "foobar"
+  request_parameters = {
+    "integration.request.querystring.BUILD_NUMS" = "method.request.querystring.BUILD_NUMS",
+    "integration.request.querystring.GIT_REF"    = "method.request.querystring.GIT_REF",
+    "integration.request.querystring.ORG"        = "method.request.querystring.ORG",
+    "integration.request.querystring.PROJECT"    = "method.request.querystring.PROJECT"
+  }
   /*request_parameters = {
     "integration.request.header.X-Authorization" = "'static'"
   }*/
