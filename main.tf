@@ -390,16 +390,18 @@ resource "aws_api_gateway_integration" "lambda" {
   # https://docs.aws.amazon.com/apigateway/latest/developerguide/api-gateway-mapping-template-reference.html
   request_templates {
     "application/json" = <<REQUEST_TEMPLATE
-{  "headers": {
+{
+  "headers":{
     "Content-Type": "application/json"
   },
- "body":{
-   "JobName": "$input.params('JobName')",
-   "JobToken": "$input.params('JobToken')",
-   "BuildCause": "$input.params('BuildCause')",
-   "BUILD_NUM": "$input.params('BUILD_NUMS')",
-   "ORG": "$input.params('ORG')",
-   "TEST": "Why?"
+  "body":{
+    "JobName"    : "$input.params('JobName')",
+    "JobToken"   : "$input.params('JobToken')",
+    "BuildCause" : "$input.params('BuildCause')",
+    "BUILD_NUMS" : "$input.params('BUILD_NUMS')",
+    "ORG"        : "$input.params('ORG')",
+    "PROJECT"    : "$input.params('PROJECT')",
+    "GIT_REF"    : "$input.params('GIT_REF')"
 }}
 REQUEST_TEMPLATE
   }
@@ -460,6 +462,8 @@ resource "aws_api_gateway_deployment" "prod" {
     "aws_api_gateway_method.get",
     "aws_api_gateway_integration.lambda"
   ]
+  description = "Production Deployment"
   rest_api_id = "${aws_api_gateway_rest_api.jenkins-trigger.id}"
   stage_name  = "ci2"
+  stage_description   = "CI Test"
 }
