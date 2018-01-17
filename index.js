@@ -20,7 +20,15 @@ exports.handler = (event, context, callback) => {
     console.log("Event: ", JSON.stringify(event, null, 2))
     console.log("Context: ", JSON.stringify(context, null, 2))
     var uri = "job/" + event.body.JobName + "/build?token=" + event.body.JobToken + "&cause=" + event.body.BuildCause
-    console.log("URI: " + uri)
+    console.log("URI pre-params: " + uri)
+    var params = "&GIT_REF=" + event.body.GIT_REF + "&BUILD_NUMS=" + event.body.BUILD_NUMS
+    if ("ORG" in event.body)
+      params = params + "&ORG=" + event.body.ORG
+    if ("PROJECT" in event.body)
+      params = params + "&PROJECT=" + event.body.PROJECT
+    console.log("Params: " + params)
+    uri = uri + params
+    console.log("URI post-params: " + uri)
     var auth = config.user + ":" + config.pswd
     console.log("Auth: " + auth)
 

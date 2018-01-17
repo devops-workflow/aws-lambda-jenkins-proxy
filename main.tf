@@ -327,8 +327,8 @@ resource "aws_api_gateway_method" "get" {
   request_parameters = {
     "method.request.querystring.BUILD_NUMS" = true,
     "method.request.querystring.GIT_REF"    = true,
-    "method.request.querystring.ORG"        = true,
-    "method.request.querystring.PROJECT"    = true
+    "method.request.querystring.ORG"        = false,
+    "method.request.querystring.PROJECT"    = false
   }
   request_validator_id = "${aws_api_gateway_request_validator.parameters.id}"
 }
