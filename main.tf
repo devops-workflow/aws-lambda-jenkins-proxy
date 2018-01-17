@@ -54,6 +54,11 @@ module "lambda-sg" {
     },
     {
       rule        = "https-443-tcp"
+      cidr_blocks = "208.184.49.194/32"
+      description = "San Mateo"
+    },
+    {
+      rule        = "https-443-tcp"
       cidr_blocks = "73.231.134.185/32"
       description = "San Mateo, VPN"
     }
@@ -84,7 +89,10 @@ data "aws_iam_policy_document" "LambdaPerms" {
     actions   = [
       "ec2:CreateNetworkInterface",
       "ec2:DeleteNetworkInterface",
-      "ec2:DescribeNetworkInterfaces"
+      "ec2:DescribeNetworkInterfaces",
+      "logs:CreateLogGroup",
+      "logs:CreateLogStream",
+      "logs:PutLogEvents"
     ]
     effect    = "Allow"
     resources = ["*"]
@@ -148,11 +156,19 @@ resource "aws_lambda_function" "test_lambda" {
   }
 }
 
-output "security_group_ids" {
-  value = "${module.lambda-sg.id}"
-}
-output "subnet_ids" {
-  value = "${data.aws_subnet_ids.private_subnet_ids.ids}"
+/**
+ * Allow APIGateway to access the Website Lambda Function.
+ */
+resource "aws_lambda_permission" "jenkins" {
+  depends_on = [
+    "aws_api_gateway_method.get",
+    "aws_api_gateway_method_response.200"
+  ]
+  statement_id = "AllowExecutionFromAPIGatewayMethod"
+  action = "lambda:InvokeFunction"
+  function_name = "${aws_lambda_function.test_lambda.function_name}"
+  principal = "apigateway.amazonaws.com"
+  source_arn = "arn:aws:execute-api:${var.region}:${data.aws_caller_identity.current.account_id}:${aws_api_gateway_rest_api.jenkins-trigger.id}/*/GET/*/*/*"
 }
 
 //
@@ -188,9 +204,63 @@ https://www.terraform.io/docs/providers/aws/r/api_gateway_usage_plan_key.html
 # https://digitalronin.github.io/2017/06/12/terraform-aws-lambda.html
 #   https://github.com/digitalronin/terraform-lambda-helloworld
 
+// API Gateway - Global settings
+resource "aws_api_gateway_account" "api" {
+  cloudwatch_role_arn = "${aws_iam_role.cloudwatch.arn}"
+}
+
+resource "aws_iam_role" "cloudwatch" {
+  name = "api_gateway_cloudwatch_global"
+  assume_role_policy = <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "",
+      "Effect": "Allow",
+      "Principal": {
+        "Service": "apigateway.amazonaws.com"
+      },
+      "Action": "sts:AssumeRole"
+    }
+  ]
+}
+EOF
+}
+
+resource "aws_iam_role_policy" "cloudwatch" {
+  name = "default"
+  role = "${aws_iam_role.cloudwatch.id}"
+  policy = <<EOF
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "logs:CreateLogGroup",
+                "logs:CreateLogStream",
+                "logs:DescribeLogGroups",
+                "logs:DescribeLogStreams",
+                "logs:PutLogEvents",
+                "logs:GetLogEvents",
+                "logs:FilterLogEvents"
+            ],
+            "Resource": "*"
+        }
+    ]
+}
+EOF
+}
+
+// API Gateway
+
 resource "aws_api_gateway_rest_api" "jenkins-trigger" {
   name        = "test-jenkins-trigger"
   description = "Trigger for Jenkins jobs"
+  depends_on  = [
+    "aws_lambda_function.test_lambda"
+  ]
 }
 /*
 resource "aws_api_gateway_stage" "ci" {
@@ -241,6 +311,13 @@ resource "aws_api_gateway_resource" "build_cause" {
   path_part   = "{BuildCause}"
 }
 
+resource "aws_api_gateway_request_validator" "parameters" {
+  name = "Validate parameters"
+  rest_api_id = "${aws_api_gateway_rest_api.jenkins-trigger.id}"
+  #validate_request_body = true
+  validate_request_parameters = true
+}
+
 resource "aws_api_gateway_method" "get" {
   rest_api_id       = "${aws_api_gateway_rest_api.jenkins-trigger.id}"
   resource_id       = "${aws_api_gateway_resource.build_cause.id}"
@@ -253,42 +330,20 @@ resource "aws_api_gateway_method" "get" {
     "method.request.querystring.ORG"        = true,
     "method.request.querystring.PROJECT"    = true
   }
+  request_validator_id = "${aws_api_gateway_request_validator.parameters.id}"
 }
 # method WORKs no error, but sure what the affect is:
 #     "method.request.path.XXX" = true
 # gtwy integ: "integration.request.path.id" = "method.request.path.accountId"
-
-resource "aws_api_gateway_integration" "lambda" {
-  rest_api_id             = "${aws_api_gateway_rest_api.jenkins-trigger.id}"
-  resource_id             = "${aws_api_gateway_resource.build_cause.id}"
-  http_method             = "${aws_api_gateway_method.get.http_method}"
-  type                    = "AWS"
-  uri   = "arn:aws:apigateway:${var.region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${var.region}:${data.aws_caller_identity.current.account_id}:function:${aws_lambda_function.test_lambda.function_name}/invocations"
-  integration_http_method = "GET"
-  passthrough_behavior    = "WHEN_NO_TEMPLATES"
-  #cache_key_parameters = ["method.request.path.param"]
-  #cache_namespace      = "foobar"
-  request_parameters = {
-    "integration.request.querystring.BUILD_NUMS" = "method.request.querystring.BUILD_NUMS",
-    "integration.request.querystring.GIT_REF"    = "method.request.querystring.GIT_REF",
-    "integration.request.querystring.ORG"        = "method.request.querystring.ORG",
-    "integration.request.querystring.PROJECT"    = "method.request.querystring.PROJECT"
-  }
-  /*request_parameters = {
-    "integration.request.header.X-Authorization" = "'static'"
-  }*/
-  # Transforms the incoming XML request to JSON
-  request_templates {
-    "application/json" = <<REQUEST_TEMPLATE
-{  "headers": {
-    "Content-Type": "application/json"
-  },
- "body":{
-   "JobName": "$input.params('JobName')",
-   "JobToken": "$input.params('JobToken')",
-   "BuildCause": "$input.params('BuildCause')"
-}}
-REQUEST_TEMPLATE
+resource "aws_api_gateway_method_settings" "s" {
+  rest_api_id = "${aws_api_gateway_rest_api.jenkins-trigger.id}"
+  stage_name  = "${aws_api_gateway_deployment.prod.stage_name}"
+  # "${aws_api_gateway_stage.test.stage_name}"
+  method_path = "${aws_api_gateway_resource.build_cause.path_part}/${aws_api_gateway_method.get.http_method}"
+  settings {
+    #metrics_enabled = true
+    data_trace_enabled  = true
+    logging_level       = "INFO"
   }
 }
 
@@ -301,12 +356,83 @@ resource "aws_api_gateway_method_response" "200" {
     "application/json"  = "Empty"
   }
 }
+resource "aws_api_gateway_method_response" "201" {
+  rest_api_id = "${aws_api_gateway_rest_api.jenkins-trigger.id}"
+  resource_id = "${aws_api_gateway_resource.build_cause.id}"
+  http_method = "${aws_api_gateway_method.get.http_method}"
+  status_code = "201"
+}
+
+resource "aws_api_gateway_integration" "lambda" {
+  depends_on = [
+    "aws_lambda_permission.jenkins"
+  ]
+  rest_api_id             = "${aws_api_gateway_rest_api.jenkins-trigger.id}"
+  resource_id             = "${aws_api_gateway_resource.build_cause.id}"
+  http_method             = "${aws_api_gateway_method.get.http_method}"
+  type                    = "AWS"
+  uri   = "arn:aws:apigateway:${var.region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${var.region}:${data.aws_caller_identity.current.account_id}:function:${aws_lambda_function.test_lambda.function_name}/invocations"
+  integration_http_method = "POST"
+  passthrough_behavior    = "WHEN_NO_TEMPLATES"
+  #content_handling     =
+  #cache_key_parameters = ["method.request.path.param"]
+  #cache_namespace      = "foobar"
+  /*request_parameters = {
+    "integration.request.querystring.BUILD_NUMS" = "method.request.querystring.BUILD_NUMS",
+    "integration.request.querystring.GIT_REF"    = "method.request.querystring.GIT_REF",
+    "integration.request.querystring.ORG"        = "method.request.querystring.ORG",
+    "integration.request.querystring.PROJECT"    = "method.request.querystring.PROJECT"
+  }*/
+  /*request_parameters = {
+    "integration.request.header.X-Authorization" = "'static'"
+  }*/
+  # Transforms the incoming XML request to JSON
+  # https://docs.aws.amazon.com/apigateway/latest/developerguide/api-gateway-mapping-template-reference.html
+  request_templates {
+    "application/json" = <<REQUEST_TEMPLATE
+{  "headers": {
+    "Content-Type": "application/json"
+  },
+ "body":{
+   "JobName": "$input.params('JobName')",
+   "JobToken": "$input.params('JobToken')",
+   "BuildCause": "$input.params('BuildCause')",
+   "BUILD_NUM": "$input.params('BUILD_NUMS')",
+   "ORG": "$input.params('ORG')",
+   "TEST": "Why?"
+}}
+REQUEST_TEMPLATE
+  }
+/*Map all params (path, query, header)
+#set($allParams = $input.params())
+{
+  "params" : {
+    #foreach($type in $allParams.keySet())
+    #set($params = $allParams.get($type))
+    "$type" : {
+      #foreach($paramName in $params.keySet())
+      "$paramName" : "$util.escapeJavaScript($params.get($paramName))"
+      #if($foreach.hasNext),#end
+      #end
+    }
+    #if($foreach.hasNext),#end
+    #end
+  }
+}*/
+}
+
 
 resource "aws_api_gateway_integration_response" "GetIntegrationResponse" {
+  depends_on = [
+    "aws_api_gateway_integration.lambda"
+  ]
   rest_api_id = "${aws_api_gateway_rest_api.jenkins-trigger.id}"
   resource_id = "${aws_api_gateway_resource.build_cause.id}"
   http_method = "${aws_api_gateway_method.get.http_method}"
   status_code = "${aws_api_gateway_method_response.200.status_code}"
+  response_templates {
+    "application/json" = ""
+  }
   # Transforms the backend JSON response to XML
   /*response_templates {
     "application/xml" = <<EOF
@@ -336,97 +462,4 @@ resource "aws_api_gateway_deployment" "prod" {
   ]
   rest_api_id = "${aws_api_gateway_rest_api.jenkins-trigger.id}"
   stage_name  = "ci2"
-}
-
-// Document methods
-resource "aws_api_gateway_documentation_part" "GetTrigger" {
-  location {
-    #name    = "BuildCause"
-    type    = "METHOD"
-    method  = "GET"
-    path    = "/{JobName}/{JobToken}/{BuildCause}"
-  }
-  properties  = "{\"description\":\"What caused this request to be triggered?\"}"
-  rest_api_id = "${aws_api_gateway_rest_api.jenkins-trigger.id}"
-}
-// Document URL path
-resource "aws_api_gateway_documentation_part" "PathBuildCause" {
-  location {
-    type    = "PATH_PARAMETER"
-    name    = "BuildCause"
-    method  = "GET"
-    path    = "/{JobName}/{JobToken}/{BuildCause}"
-  }
-  properties  = "{\"description\":\"What caused this request to be triggered?\"}"
-  rest_api_id = "${aws_api_gateway_rest_api.jenkins-trigger.id}"
-}
-resource "aws_api_gateway_documentation_part" "PathJobName" {
-  location {
-    type    = "PATH_PARAMETER"
-    name    = "JobName"
-    method  = "GET"
-    path    = "/{JobName}"
-  }
-  properties  = "{\"description\":\"Name of the Jenkins Job to trigger\"}"
-  rest_api_id = "${aws_api_gateway_rest_api.jenkins-trigger.id}"
-}
-resource "aws_api_gateway_documentation_part" "PathJobToken" {
-  location {
-    type    = "PATH_PARAMETER"
-    name    = "JobToken"
-    method  = "GET"
-    path    = "/{JobName}/{JobToken}"
-  }
-  properties  = "{\"description\":\"Jenkins Job Token for triggering the specified job\"}"
-  rest_api_id = "${aws_api_gateway_rest_api.jenkins-trigger.id}"
-}
-// Document query parameters
-resource "aws_api_gateway_documentation_part" "QueryGitRef" {
-  location {
-    type    = "QUERY_PARAMETER"
-    name    = "GIT_REF"
-    method  = "GET"
-    path    = "/{JobName}/{JobToken}/{BuildCause}"
-  }
-  properties  = "{\"description\":\"Git reference of build\"}"
-  rest_api_id = "${aws_api_gateway_rest_api.jenkins-trigger.id}"
-}
-resource "aws_api_gateway_documentation_part" "QueryBuildNums" {
-  location {
-    type    = "QUERY_PARAMETER"
-    name    = "BUILD_NUMS"
-    method  = "GET"
-    path    = "/{JobName}/{JobToken}/{BuildCause}"
-  }
-  properties  = "{\"description\":\"Comma separated list of CIrcleCI build numbers to get artifacts from\"}"
-  rest_api_id = "${aws_api_gateway_rest_api.jenkins-trigger.id}"
-}
-resource "aws_api_gateway_documentation_part" "QueryOrg" {
-  location {
-    type    = "QUERY_PARAMETER"
-    name    = "ORG"
-    method  = "GET"
-    path    = "/{JobName}/{JobToken}/{BuildCause}"
-  }
-  properties  = "{\"description\":\"GitHub organization or user where project repo is\"}"
-  rest_api_id = "${aws_api_gateway_rest_api.jenkins-trigger.id}"
-}
-resource "aws_api_gateway_documentation_part" "QueryProject" {
-  location {
-    type    = "QUERY_PARAMETER"
-    name    = "PROJECT"
-    method  = "GET"
-    path    = "/{JobName}/{JobToken}/{BuildCause}"
-  }
-  properties  = "{\"description\":\"GitHub project repo name\"}"
-  rest_api_id = "${aws_api_gateway_rest_api.jenkins-trigger.id}"
-}
-
-/*
-output "dev_url" {
-  value = "https://${aws_api_gateway_deployment.example_deployment_dev.rest_api_id}.execute-api.${var.region}.amazonaws.com/${aws_api_gateway_deployment.example_deployment_dev.stage_name}"
-}*/
-
-output "prod_url" {
-  value = "https://${aws_api_gateway_deployment.prod.rest_api_id}.execute-api.${var.region}.amazonaws.com/${aws_api_gateway_deployment.prod.stage_name}"
 }
