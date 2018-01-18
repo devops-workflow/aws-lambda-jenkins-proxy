@@ -24,7 +24,7 @@ if [ "${CIRCLE_BRANCH}" == "master" ]; then
   repoBaseURL="${CIRCLE_REPOSITORY_URL%.*}"
   # Why not CIRCLE_PROJECT_REPONAME ?
   repo="${repoBaseURL##*/}"
-  job_name="${namespace}+${repo}+CI+Package_Docker"
+  job_name="${namespace}+${repo}+CI+Analytics+CircleCI"
   build_cause="${JENKINS_BUILD_CAUSE}%20by%20${CIRCLE_USERNAME}"
   if [ -n "${BUILD_NUMS}" ]; then
     BuildNums="${BUILD_NUMS}"

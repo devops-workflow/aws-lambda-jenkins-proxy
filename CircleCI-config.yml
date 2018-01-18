@@ -1,33 +1,76 @@
 version: 2
 jobs:
+  eslint:
+    working_directory: ~/repo
+    docker:
+      - image: docker:git
+    steps:
+      - checkout
+      - run: |
+          echo "Run ESLint"
+          # Generate output (Formats: Checkstyle, JUnit)
+          mkdir -p reports/junit
+          touch reports/junit/eslint.xml
+          touch reports/checkstyle.xml
+      - store_test_results:
+          path: reports/junit
+      - store_artifacts:
+          path: reports
+      - run: |
+          mkdir -p workspace/build_nums
+          echo "${CIRCLE_BUILD_NUM}" > workspace/build_nums/$${CIRCLE_STAGE}.num
+      - persist_to_workspace:
+          root: workspace
+          paths:
+            - build_nums
   build:
     working_directory: ~/repo
     docker:
       - image: docker:git
     steps:
       - checkout
-      - run: echo "Initial testing should be here"
       - run: |
-          mkdir -p workspace
-          echo "${CIRCLE_BUILD_NUM}" > workspace/build_num
+          echo "Run unit tests and code coverage"
+          # Generate output (Formats: JUnit, Clover, LCOV, HTML)
+          mkdir -p reports/{junit,coverage/html}
+          touch reports/junit/unittests.xml
+          touch reports/coverage/{clover,cobertura}.xml
+          touch reports/coverage/html/index.html
+      - store_test_results:
+          path: reports/junit
+      - store_artifacts:
+          path: reports
+      - run: |
+          mkdir -p workspace/build_nums
+          echo "${CIRCLE_BUILD_NUM}" > workspace/build_nums/${CIRCLE_STAGE}.num
       - persist_to_workspace:
           root: workspace
           paths:
-            - build_num
+            - build_nums
   jenkins:
     docker:
       - image: circleci/python
     steps:
       - attach_workspace:
           at: /tmp/workspace
-      - run: echo 'export UPSTREAM_BUILD_NUM=$(cat /tmp/workspace/build_num)' >> $BASH_ENV
       - run: |
-          echo "Upstream build #: ${UPSTREAM_BUILD_NUM}"
+          BUILD_NUMS=
+          for build in $(ls -1 /tmp/workspace/build_nums/*.num); do
+            BUILD_NUMS="${BUILD_NUMS},$(cat /tmp/workspace/build_nums/${build})"
+          done
+          BUILD_NUMS=$(echo ${BUILD_NUMS} | cut -c2-)
+          echo "export BUILD_NUMS=${BUILD_NUMS}" >> $BASH_ENV
+          #echo 'export UPSTREAM_BUILD_NUM=$(cat /tmp/workspace/build_num)' >> $BASH_ENV
+      - run: |
+          #echo "Upstream build #: ${UPSTREAM_BUILD_NUM}"
           echo "Current build #: ${CIRCLE_BUILD_NUM}"
+          echo "Prior build #: ${CIRCLE_PREVIOUS_BUILD_NUM}"
+          echo "Artifact build #s: ${BUILD_NUMS}"
       - deploy:
           name: Call Jenkins to continue workflow
           command: |
-            curl -sSL https://raw.githubusercontent.com/devops-workflow/aws-lambda-jenkins-proxy/master/integration-circleci-to-jenkins.sh | bash -x -s -- NAMESPACE
+            echo "Deploy: Artifact build #s: ${BUILD_NUMS}"
+            curl -sSL https://raw.githubusercontent.com/devops-workflow/aws-lambda-jenkins-proxy/master/integration-circleci-to-jenkins-2.sh | bash -x -s -- NAMESPACE
             # or
             #wget -qO- https://raw.githubusercontent.com/devops-workflow/aws-lambda-jenkins-proxy/master/integration-circleci-to-jenkins.sh | bash -s -- NAMESPACE
             # https://circleci.com/docs/2.0/env-vars/
@@ -37,8 +80,10 @@ workflows:
   version: 2
   ci:
     jobs:
+      - eslint
       - build
       - jenkins:
           context: org-global
           requires:
             - build
+            - eslint
