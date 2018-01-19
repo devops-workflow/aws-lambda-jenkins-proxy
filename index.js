@@ -19,7 +19,7 @@ exports.handler = (event, context, callback) => {
     // Display all data passed in
     console.log("Event: ", JSON.stringify(event, null, 2))
     console.log("Context: ", JSON.stringify(context, null, 2))
-    var uri = "job/" + event.body.JobName + "/build?token=" + event.body.JobToken + "&cause=" + event.body.BuildCause
+    var uri = "job/" + event.body.JobName + "/buildWithParameters?token=" + event.body.JobToken + "&cause=" + event.body.BuildCause
     console.log("URI pre-params: " + uri)
     var params = "&GIT_REF=" + event.body.GIT_REF + "&BUILD_NUMS=" + event.body.BUILD_NUMS
     if ("ORG" in event.body)
