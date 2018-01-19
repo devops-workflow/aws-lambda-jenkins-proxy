@@ -14,9 +14,11 @@ jobs:
           mkdir -p reports/junit
           cat <<EOF >reports/junit/eslint.xml
           <?xml version="1.0" encoding="utf-8"?>
+          <testsuites name="ESLint" tests="0" failures="0"></testsuites>
           EOF
           cat <<EOF >reports/checkstyle.xml
           <?xml version="1.0" encoding="utf-8"?>
+          <checkstyle version="4.3"></checkstyle>
           EOF
       - store_test_results:
           path: reports/junit
@@ -42,12 +44,16 @@ jobs:
           mkdir -p reports/junit reports/coverage/html
           cat <<EOF >reports/junit/test-results.xml
           <?xml version="1.0" encoding="utf-8"?>
+          <testsuites name="UnitTests" tests="0" failures="0"></testsuites>
           EOF
           cat <<EOF >reports/coverage/cobertura.xml
           <?xml version="1.0" encoding="utf-8"?>
+          <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
+          <coverage></coverage>
           EOF
           cat <<EOF >reports/coverage/clover.xml
           <?xml version="1.0" encoding="utf-8"?>
+          <coverage clover="3.2.0"></coverage>
           EOF
           cat <<EOF >reports/coverage/html/index.html
           <!doctype html>
