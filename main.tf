@@ -128,6 +128,10 @@ data "archive_file" "lambda" {
 }
 
 resource "aws_lambda_function" "test_lambda" {
+  # Cycle ??
+  #depends_on = [
+  #  "aws_cloudwatch_log_group.lambda"
+  #]
   description       = "Proxy for triggering Jenkins jobs"
   filename         = "${data.archive_file.lambda.output_path}"
   function_name    = "test-jenkins-trigger-proxy"
@@ -287,6 +291,9 @@ resource "aws_api_gateway_method" "get" {
 #     "method.request.path.XXX" = true
 # gtwy integ: "integration.request.path.id" = "method.request.path.accountId"
 resource "aws_api_gateway_method_settings" "s" {
+  depends_on = [
+    "aws_cloudwatch_log_group.api-gateway"
+  ]
   rest_api_id = "${aws_api_gateway_rest_api.jenkins-trigger.id}"
   stage_name  = "${aws_api_gateway_deployment.prod.stage_name}"
   # "${aws_api_gateway_stage.test.stage_name}"
