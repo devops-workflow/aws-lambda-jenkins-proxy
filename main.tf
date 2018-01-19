@@ -104,9 +104,9 @@ resource "aws_iam_role_policy" "LambdaPerms" {
     policy  = "${data.aws_iam_policy_document.LambdaPerms.json}"
 }
 resource "aws_iam_role" "iam_for_lambda" {
-  name = "jenkins-trigger"
-  #path               = "${var.aws_iam_role_path}"
-  assume_role_policy = "${data.aws_iam_policy_document.assume_role_policy.json}"
+  name                = "jenkins-trigger"
+  path                = "/lambda/"
+  assume_role_policy  = "${data.aws_iam_policy_document.assume_role_policy.json}"
 }
 /*
 resource "aws_iam_role_policy" "lambda" {
@@ -151,7 +151,7 @@ resource "aws_lambda_function" "test_lambda" {
     subnet_ids          = ["${data.aws_subnet_ids.private_subnet_ids.ids}"]
   }
   tags {
-     "Description"  = "TEST Proxy for triggering Jenkins jobs"
+     "Description"  = "Proxy for triggering Jenkins jobs"
      "terraform"    = "true"
   }
 }
@@ -203,55 +203,6 @@ https://www.terraform.io/docs/providers/aws/r/api_gateway_usage_plan_key.html
 # https://andydote.co.uk/2017/03/17/terraform-aws-lambda-api-gateway/
 # https://digitalronin.github.io/2017/06/12/terraform-aws-lambda.html
 #   https://github.com/digitalronin/terraform-lambda-helloworld
-
-// API Gateway - Global settings
-resource "aws_api_gateway_account" "api" {
-  cloudwatch_role_arn = "${aws_iam_role.cloudwatch.arn}"
-}
-
-resource "aws_iam_role" "cloudwatch" {
-  name = "api_gateway_cloudwatch_global"
-  assume_role_policy = <<EOF
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Sid": "",
-      "Effect": "Allow",
-      "Principal": {
-        "Service": "apigateway.amazonaws.com"
-      },
-      "Action": "sts:AssumeRole"
-    }
-  ]
-}
-EOF
-}
-
-resource "aws_iam_role_policy" "cloudwatch" {
-  name = "default"
-  role = "${aws_iam_role.cloudwatch.id}"
-  policy = <<EOF
-{
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Effect": "Allow",
-            "Action": [
-                "logs:CreateLogGroup",
-                "logs:CreateLogStream",
-                "logs:DescribeLogGroups",
-                "logs:DescribeLogStreams",
-                "logs:PutLogEvents",
-                "logs:GetLogEvents",
-                "logs:FilterLogEvents"
-            ],
-            "Resource": "*"
-        }
-    ]
-}
-EOF
-}
 
 // API Gateway
 
