@@ -1,7 +1,9 @@
+# Example of running paralel jobs and passing the build numbers between jobs,
+# so they can be passed to Jenkins
 version: 2
 jobs:
   eslint:
-    working_directory: ~/repo
+    working_directory: /root/repo
     docker:
       - image: docker:git
     steps:
@@ -10,21 +12,25 @@ jobs:
           echo "Run ESLint"
           # Generate output (Formats: Checkstyle, JUnit)
           mkdir -p reports/junit
-          touch reports/junit/eslint.xml
-          touch reports/checkstyle.xml
+          cat <<EOF >reports/junit/eslint.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          EOF
+          cat <<EOF >reports/checkstyle.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          EOF
       - store_test_results:
           path: reports/junit
       - store_artifacts:
           path: reports
       - run: |
           mkdir -p workspace/build_nums
-          echo "${CIRCLE_BUILD_NUM}" > workspace/build_nums/$${CIRCLE_STAGE}.num
+          echo "${CIRCLE_BUILD_NUM}" > workspace/build_nums/${CIRCLE_STAGE}.num
       - persist_to_workspace:
           root: workspace
           paths:
             - build_nums
-  build:
-    working_directory: ~/repo
+  unittests:
+    working_directory: /root/repo
     docker:
       - image: docker:git
     steps:
@@ -32,10 +38,19 @@ jobs:
       - run: |
           echo "Run unit tests and code coverage"
           # Generate output (Formats: JUnit, Clover, LCOV, HTML)
-          mkdir -p reports/{junit,coverage/html}
-          touch reports/junit/unittests.xml
-          touch reports/coverage/{clover,cobertura}.xml
-          touch reports/coverage/html/index.html
+          mkdir -p reports/junit reports/coverage/html
+          cat <<EOF >reports/junit/unittests.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          EOF
+          cat <<EOF >reports/coverage/cobertura.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          EOF
+          cat <<EOF >reports/coverage/clover.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          EOF
+          cat <<EOF >reports/coverage/html/index.html
+          <!doctype html>
+          EOF
       - store_test_results:
           path: reports/junit
       - store_artifacts:
@@ -53,37 +68,19 @@ jobs:
     steps:
       - attach_workspace:
           at: /tmp/workspace
-      - run: |
-          BUILD_NUMS=
-          for build in $(ls -1 /tmp/workspace/build_nums/*.num); do
-            BUILD_NUMS="${BUILD_NUMS},$(cat /tmp/workspace/build_nums/${build})"
-          done
-          BUILD_NUMS=$(echo ${BUILD_NUMS} | cut -c2-)
-          echo "export BUILD_NUMS=${BUILD_NUMS}" >> $BASH_ENV
-          #echo 'export UPSTREAM_BUILD_NUM=$(cat /tmp/workspace/build_num)' >> $BASH_ENV
-      - run: |
-          #echo "Upstream build #: ${UPSTREAM_BUILD_NUM}"
-          echo "Current build #: ${CIRCLE_BUILD_NUM}"
-          echo "Prior build #: ${CIRCLE_PREVIOUS_BUILD_NUM}"
-          echo "Artifact build #s: ${BUILD_NUMS}"
       - deploy:
           name: Call Jenkins to continue workflow
           command: |
-            echo "Deploy: Artifact build #s: ${BUILD_NUMS}"
             curl -sSL https://raw.githubusercontent.com/devops-workflow/aws-lambda-jenkins-proxy/master/integration-circleci-to-jenkins-2.sh | bash -x -s -- NAMESPACE
-            # or
-            #wget -qO- https://raw.githubusercontent.com/devops-workflow/aws-lambda-jenkins-proxy/master/integration-circleci-to-jenkins.sh | bash -s -- NAMESPACE
-            # https://circleci.com/docs/2.0/env-vars/
-          #environment:
-          #  UPSTREAM_BUILD_NUM: $(cat /tmp/workspace/build_num)
+
 workflows:
   version: 2
   ci:
     jobs:
       - eslint
-      - build
+      - unittests
       - jenkins:
           context: org-global
           requires:
-            - build
+            - unittests
             - eslint
