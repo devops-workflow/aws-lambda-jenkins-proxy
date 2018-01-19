@@ -38,7 +38,7 @@ jobs:
       - checkout
       - run: |
           echo "Run unit tests and code coverage"
-          # Generate output (Formats: JUnit, Clover, LCOV, HTML)
+          # Generate output (Formats: JUnit, Clover, Cobertura, LCOV, HTML)
           mkdir -p reports/junit reports/coverage/html
           cat <<EOF >reports/junit/unittests.xml
           <?xml version="1.0" encoding="utf-8"?>
