@@ -40,7 +40,7 @@ jobs:
           echo "Run unit tests and code coverage"
           # Generate output (Formats: JUnit, Clover, Cobertura, LCOV, HTML)
           mkdir -p reports/junit reports/coverage/html
-          cat <<EOF >reports/junit/unittests.xml
+          cat <<EOF >reports/junit/test-results.xml
           <?xml version="1.0" encoding="utf-8"?>
           EOF
           cat <<EOF >reports/coverage/cobertura.xml
@@ -84,5 +84,5 @@ workflows:
       - jenkins:
           context: org-global
           requires:
-            - unittests
             - eslint
+            - unittests
