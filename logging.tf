@@ -55,7 +55,7 @@ EOF
 // Cloudwatch settings
 //
 resource "aws_cloudwatch_log_group" "lambda" {
-  name              = "/aws/lambda/${aws_lambda_function.test_lambda.function_name}"
+  name              = "/aws/lambda/${var.lambda_name}"
   retention_in_days = 14
   tags {
     "Description" = "Jenkins Trigger lambda logs"
@@ -63,7 +63,7 @@ resource "aws_cloudwatch_log_group" "lambda" {
     "terraform"   = "true"
   }
 }
-resource "aws_cloudwatch_log_group" "api-gateway" {
+resource "aws_cloudwatch_log_group" "prod-api-gateway" {
   name              = "API-Gateway-Execution-Logs_${aws_api_gateway_rest_api.jenkins-trigger.id}/${aws_api_gateway_deployment.prod.stage_name}"
   retention_in_days = 14
   tags {

@@ -127,14 +127,13 @@ data "archive_file" "lambda" {
   output_path = "lambda.zip"
 }
 
-resource "aws_lambda_function" "test_lambda" {
-  # Cycle ??
-  #depends_on = [
-  #  "aws_cloudwatch_log_group.lambda"
-  #]
+resource "aws_lambda_function" "jenkins-proxy" {
+  depends_on = [
+    "aws_cloudwatch_log_group.lambda"
+  ]
   description       = "Proxy for triggering Jenkins jobs"
   filename         = "${data.archive_file.lambda.output_path}"
-  function_name    = "test-jenkins-trigger-proxy"
+  function_name    = "${var.lambda_name}"
   role             = "${aws_iam_role.iam_for_lambda.arn}"
   handler          = "index.handler"
   source_code_hash = "${base64sha256(file("${data.archive_file.lambda.output_path}"))}"
@@ -168,10 +167,10 @@ resource "aws_lambda_permission" "jenkins" {
     "aws_api_gateway_method.get",
     "aws_api_gateway_method_response.200"
   ]
-  statement_id = "AllowExecutionFromAPIGatewayMethod"
-  action = "lambda:InvokeFunction"
-  function_name = "${aws_lambda_function.test_lambda.function_name}"
-  principal = "apigateway.amazonaws.com"
+  statement_id  = "AllowExecutionFromAPIGatewayMethod"
+  action        = "lambda:InvokeFunction"
+  function_name = "${aws_lambda_function.jenkins-proxy.function_name}"
+  principal     = "apigateway.amazonaws.com"
   source_arn = "arn:aws:execute-api:${var.region}:${data.aws_caller_identity.current.account_id}:${aws_api_gateway_rest_api.jenkins-trigger.id}/*/GET/*/*/*"
 }
 
@@ -211,15 +210,15 @@ https://www.terraform.io/docs/providers/aws/r/api_gateway_usage_plan_key.html
 // API Gateway
 
 resource "aws_api_gateway_rest_api" "jenkins-trigger" {
-  name        = "test-jenkins-trigger"
+  name        = "${var.api_gtwy_name}"
   description = "Trigger for Jenkins jobs"
   depends_on  = [
-    "aws_lambda_function.test_lambda"
+    "aws_lambda_function.jenkins-proxy"
   ]
 }
 /*
-resource "aws_api_gateway_stage" "ci" {
-  stage_name    = "ci2"
+resource "aws_api_gateway_stage" "prod" {
+  stage_name    = "prod"
   description   = "Continueos Integration"
   rest_api_id   = "${aws_api_gateway_rest_api.jenkins-trigger.id}"
   deployment_id = "${aws_api_gateway_deployment.prod.id}"
@@ -231,6 +230,7 @@ resource "aws_api_gateway_api_key" "CircleCI" {
   description = "Access for CircleCI"
 }
 
+# FIX: Dependency issue
 resource "aws_api_gateway_usage_plan" "CircleCI" {
   name         = "CircleCI2"
   description  = "CircleCI usage"
@@ -282,21 +282,20 @@ resource "aws_api_gateway_method" "get" {
   request_parameters = {
     "method.request.querystring.BUILD_NUMS" = true,
     "method.request.querystring.GIT_REF"    = true,
-    "method.request.querystring.ORG"        = false,
-    "method.request.querystring.PROJECT"    = false
+    "method.request.querystring.ORG"        = true,
+    "method.request.querystring.PROJECT"    = true
   }
   request_validator_id = "${aws_api_gateway_request_validator.parameters.id}"
 }
 # method WORKs no error, but sure what the affect is:
 #     "method.request.path.XXX" = true
 # gtwy integ: "integration.request.path.id" = "method.request.path.accountId"
-resource "aws_api_gateway_method_settings" "s" {
+resource "aws_api_gateway_method_settings" "prod-get" {
   depends_on = [
-    "aws_cloudwatch_log_group.api-gateway"
+    "aws_cloudwatch_log_group.prod-api-gateway"
   ]
   rest_api_id = "${aws_api_gateway_rest_api.jenkins-trigger.id}"
   stage_name  = "${aws_api_gateway_deployment.prod.stage_name}"
-  # "${aws_api_gateway_stage.test.stage_name}"
   method_path = "${aws_api_gateway_resource.build_cause.path_part}/${aws_api_gateway_method.get.http_method}"
   settings {
     #metrics_enabled = true
@@ -329,7 +328,7 @@ resource "aws_api_gateway_integration" "lambda" {
   resource_id             = "${aws_api_gateway_resource.build_cause.id}"
   http_method             = "${aws_api_gateway_method.get.http_method}"
   type                    = "AWS"
-  uri   = "arn:aws:apigateway:${var.region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${var.region}:${data.aws_caller_identity.current.account_id}:function:${aws_lambda_function.test_lambda.function_name}/invocations"
+  uri   = "arn:aws:apigateway:${var.region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${var.region}:${data.aws_caller_identity.current.account_id}:function:${aws_lambda_function.jenkins-proxy.function_name}/invocations"
   integration_http_method = "POST"
   passthrough_behavior    = "WHEN_NO_TEMPLATES"
   #content_handling     =
@@ -411,8 +410,10 @@ resource "aws_api_gateway_deployment" "dev" {
     "aws_api_gateway_method.example_api_method",
     "aws_api_gateway_integration.example_api_method-integration"
   ]
+  description = "Development Deployment"
   rest_api_id = "${aws_api_gateway_rest_api.jenkins-trigger.id}"
-  stage_name = "dev"
+  stage_name  = "dev"
+  stage_description   = "Development CircleCI to Jenkins integration"
 }
 */
 resource "aws_api_gateway_deployment" "prod" {
@@ -422,6 +423,6 @@ resource "aws_api_gateway_deployment" "prod" {
   ]
   description = "Production Deployment"
   rest_api_id = "${aws_api_gateway_rest_api.jenkins-trigger.id}"
-  stage_name  = "ci2"
-  stage_description   = "CI Test"
+  stage_name  = "prod"
+  stage_description   = "Production CircleCI to Jenkins integration"
 }
