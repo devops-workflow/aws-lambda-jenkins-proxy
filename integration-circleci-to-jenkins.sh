@@ -20,12 +20,34 @@ if [ "${CIRCLECI}" != 'true' ]; then
   echo "ERROR: Not running under CircleCI"
   exit 1
 fi
+
+# Get build numbers of artifacts
+if [ -d /tmp/workspace/build_nums ]; then
+  BuildNums=
+  for num in $(ls -1 /tmp/workspace/build_nums/*.num); do
+    BuildNums="${BuildNums},$(cat ${num})"
+  done
+  BuildNums=$(echo ${BuildNums} | cut -c2-)
+elif [ "${CIRCLE_STAGE}" == "ci" -o "${CIRCLE_STAGE}" == "Jenkins" ]; then
+  BuildNums="${CIRCLE_PREVIOUS_BUILD_NUM}"
+else
+  BuildNums="${CIRCLE_BUILD_NUM}"
+fi
+
 if [ "${CIRCLE_BRANCH}" == "master" ]; then
   repoBaseURL="${CIRCLE_REPOSITORY_URL%.*}"
   # Why not CIRCLE_PROJECT_REPONAME ?
   repo="${repoBaseURL##*/}"
-  job_name="${namespace}+${repo}+CI+Package_Docker"
+  job_name="${namespace}+${repo}+CI+Analytics+CircleCI"
   build_cause="${JENKINS_BUILD_CAUSE}%20by%20${CIRCLE_USERNAME}"
+  params="&ORG=${CIRCLE_PROJECT_USERNAME}&PROJECT=${CIRCLE_PROJECT_REPONAME}&GIT_REF=${CIRCLE_SHA1}&BUILD_NUMS=${BuildNums}"
   echo "INFO: Triggering Jenkins job: ${job_name}"
-  curl -H "x-api-key: ${JENKINS_API_KEY}" ${JENKINS_URL}${job_name}/${JENKINS_JOB_TOKEN}/${build_cause}
+  echo "INFO: Params: ${params}"
+  echo
+  curl -H "x-api-key: ${JENKINS_API_KEY}" "${JENKINS_URL}${job_name}/${JENKINS_JOB_TOKEN}/${build_cause}?${params}"
 fi
+
+
+#CIRCLE_JOB - Job Name
+#CIRCLE_TAG
+#CIRCLE_STAGE
