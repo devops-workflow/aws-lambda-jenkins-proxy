@@ -1,10 +1,12 @@
 variable "region" {
   default = "us-west-2"
 }
+
 variable "env" {
   description = "Deploy environment"
   default     = "one"
 }
+
 variable "jenkins_pswd" {
   description = "Login password for Jenkins server"
 }

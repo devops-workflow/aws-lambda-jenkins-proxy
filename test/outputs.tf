@@ -7,19 +7,22 @@ output "whitelist_wiser_id" {
 output "security_group_ids" {
   value = "${module.lambda.security_group_ids}"
 }
+
 output "subnet_ids" {
   value = "${module.lambda.subnet_ids}"
 }
 
-output  "api_id" {
+output "api_id" {
   description = "API Gateway ID"
   value       = "${module.lambda.api_id}"
 }
-output  "api_key_id" {
+
+output "api_key_id" {
   description = "API Key ID"
   value       = "${module.lambda.api_key_id}"
 }
-output  "api_key_value" {
+
+output "api_key_value" {
   description = "API Key value"
   value       = "${module.lambda.api_key_value}"
 }

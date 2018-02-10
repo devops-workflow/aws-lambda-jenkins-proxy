@@ -1,15 +1,18 @@
-output  "api_id" {
+output "api_id" {
   description = "API Gateway ID"
   value       = "${aws_api_gateway_rest_api.jenkins-trigger.id}"
 }
-output  "api_key_id" {
+
+output "api_key_id" {
   description = "API Key ID"
   value       = "${aws_api_gateway_api_key.CircleCI.id}"
 }
-output  "api_key_value" {
+
+output "api_key_value" {
   description = "API Key value"
   value       = "${aws_api_gateway_api_key.CircleCI.value}"
 }
+
 /*output  "api_url" {
   description = "API Gateway URL"
   value       = ""
@@ -18,6 +21,7 @@ output  "api_key_value" {
 output "security_group_ids" {
   value = "${module.lambda-sg.id}"
 }
+
 output "subnet_ids" {
   value = "${data.aws_subnet_ids.private_subnet_ids.ids}"
 }
