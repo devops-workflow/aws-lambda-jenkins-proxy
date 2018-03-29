@@ -29,7 +29,11 @@ if [ -d /tmp/workspace/build_nums ]; then
   done
   BuildNums=$(echo ${BuildNums} | cut -c2-)
 elif [ "${CIRCLE_STAGE}" == "ci" -o "${CIRCLE_STAGE}" == "Jenkins" ]; then
-  BuildNums="${CIRCLE_PREVIOUS_BUILD_NUM}"
+  if [ "${CIRCLE_PREVIOUS_BUILD_NUM}" != "" ]; then
+    BuildNums="${CIRCLE_PREVIOUS_BUILD_NUM}"
+  else
+    BuildNums="${CIRCLE_BUILD_NUM}"
+  fi
 else
   BuildNums="${CIRCLE_BUILD_NUM}"
 fi
